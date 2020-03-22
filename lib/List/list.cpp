@@ -82,7 +82,7 @@ int List::count(){
     /* The below while loop is terminated as soon as n is m_tail, so we increment count before hand*/
     count = 1;
     n = m_head;
-    while ( n != m_tail) {
+    while ( n != m_tail ) {
         n = n->next;
         count++;
     }

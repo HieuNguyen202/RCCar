@@ -44,13 +44,13 @@ typedef struct Cluster {
     List leds;
     Cluster() {
         effect = NULL;
+        List led();
     }
 } Cluster;
 
 class Light {
     public:
         /* Constructor */
-        Light(int ledCount, int clusterCount);
         Light(int ledCount, int clusterCount, int pin);
 
         /* Controls */
@@ -90,21 +90,21 @@ class Light {
         void update();
 
         /* Getters */
-        Node *nodes()             { return m_nodes; };
-        Node *node(int idx)      { return m_nodes + idx; };
-        int ledCount()            { return m_ledCount; };
-        int clusterCount()        { return m_clusterCount; };
-        Cluster *clusters()       { return m_clusters; };
-        Cluster *cluster(int idx) { return m_clusters + idx;  };
+        Adafruit_NeoPixel *pixels() { return m_pixels; };
+        Node *nodes()               { return m_nodes; };
+        Node *node(int idx)         { return (idx >= 0) ? (m_nodes + (idx % m_ledCount)) : NULL; };
+        int ledCount()              { return m_ledCount; };
+        int clusterCount()          { return m_clusterCount; };
+        Cluster *clusters()         { return m_clusters; };
+        Cluster *cluster(int idx)   { return (idx >= 0) ? (m_clusters + (idx % m_clusterCount)) : NULL; };
 
     private:
-        void init(int ledCount, int clusterCount);
+        void init(int ledCount, int clusterCount, int pin);
         /* Make and return a light LightArray struct  */
         int m_ledCount; // led count
         int m_clusterCount; // cluster count
         Node *m_nodes;
         Cluster *m_clusters;
         Adafruit_NeoPixel *m_pixels;
-
 };
 #endif

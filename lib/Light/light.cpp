@@ -1,29 +1,27 @@
 #include "light.h"
 
-Light::Light(int ledCount, int clusterCount) {
-    init(ledCount, clusterCount);
-}
-
 Light::Light(int ledCount, int clusterCount, int pin) {
-    init(ledCount, clusterCount);
-    // Init pixels
-    if (m_ledCount > 0)
-        m_pixels = new Adafruit_NeoPixel(m_ledCount, pin, NEO_GRB + NEO_KHZ800);
+    init(ledCount, clusterCount, pin);
 }
 
-void Light::init(int ledCount, int clusterCount){
+void Light::init(int ledCount, int clusterCount, int pin){
     m_ledCount = ledCount <= 0 ? 0 : ledCount;
     m_clusterCount = clusterCount <= 0 ? 0 : clusterCount;
 
     // Init nodes
-    if (m_ledCount <= 0) {
+    if (m_ledCount <= 0 || pin < 0) {
         m_nodes = NULL;
+        m_pixels = NULL;
     } else {
+        // Init nodes
         m_nodes = new Node[m_ledCount];
         for (int i = 0; i < m_ledCount; i++)
         {
             m_nodes[i].ivalue = i; // set LED idx
         }
+        // Init pixels
+        m_pixels = new Adafruit_NeoPixel(m_ledCount, pin, NEO_GRB + NEO_KHZ800);
+        m_pixels->begin(); // INITIALIZE NeoPixel strip object (REQUIRED)
     }
 
     // Init clusters
@@ -39,30 +37,30 @@ void Light::init(int ledCount, int clusterCount){
 }
 
 void Light::bind(int led, int cluster){
-    //Guard
+    //Guards
     if(led < 0 ||
-       led >= m_ledCount ||
+       m_clusterCount == 0 ||
+       m_ledCount == 0 ||
        cluster < 0 ||
        cluster >= m_clusterCount)
         return;
-    m_clusters[cluster].leds.steal(m_nodes + led);
+    this->cluster(cluster)->leds.steal(m_nodes + (led % m_ledCount));
 }
 
 void Light::bind(int start, int end, int cluster){
-    //Guard
+    //Guards
     int temp;
-    if (start < 0 ||
-        start >= m_ledCount ||
-        end < 0 ||
-        end >= m_ledCount ||
-        cluster < 0 ||
-        cluster >= m_clusterCount)
-        return;
     if (start > end) { // swap
         temp = end;
         end = start;
         start = temp;
     }
+    if (start < 0 ||
+        m_clusterCount == 0 ||
+        m_ledCount == 0 ||
+        cluster < 0 ||
+        cluster >= m_clusterCount)
+        return;
     for (int i = start; i <= end; i++)
     {
        bind(i, cluster);
@@ -70,9 +68,18 @@ void Light::bind(int start, int end, int cluster){
 }
 
 void Light::off(int cluster){
-    Cluster *c = this->cluster(cluster);
-    for (Node *n = c->leds.head(); !IS_STANDALONE(n); n = n->next)
+    setColor(cluster, 0);
+}
+
+void Light::setColor(int cluster, int color){
+    if (!m_clusters || !m_pixels || !m_nodes)
+        return;
+    List *l = &(this->cluster(cluster)->leds);
+    if (l->empty())
+        return;
+    for (Node *n = l->head(); !IS_SELF(n); n = n->next)
     {
-        int pixel = n->ivalue;
+        m_pixels->setPixelColor(n->ivalue, color);
     }
+    m_pixels->show();
 }

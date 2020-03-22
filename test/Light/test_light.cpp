@@ -3,6 +3,8 @@
 #include <light.h>
 #include <unity.h>
 #include <stddef.h>
+#define PIN 6 // On Trinket or Gemma, suggest changing this to 1
+
 #ifdef ARDUINO
 
 // This should be user defined cluster
@@ -20,14 +22,16 @@ void test_light_constructor() {
 
     TEST_ASSERT_EQUAL(6, NUM_CLUSTERS);
 
-    Light l1(-1, 0);
+    // Bad parameters
+    Light l1(-1, 0, -1);
     TEST_ASSERT_EQUAL(0, l1.ledCount());
     TEST_ASSERT_EQUAL(0, l1.clusterCount());
     TEST_ASSERT_NULL(l1.nodes());
     TEST_ASSERT_NULL(l1.clusters());
+    TEST_ASSERT_NULL(l1.pixels());
 
-    // typical list
-    Light l3(10, NUM_CLUSTERS);
+    // Typical parameters
+    Light l3(10, NUM_CLUSTERS, PIN);
     TEST_ASSERT_EQUAL(10, l3.ledCount());
     TEST_ASSERT_EQUAL(NUM_CLUSTERS, l3.clusterCount());
 
@@ -57,10 +61,15 @@ void test_light_constructor() {
     TEST_ASSERT_EQUAL_PTR(l3.cluster(3), l3.cluster(TAIL));
     TEST_ASSERT_EQUAL_PTR(l3.cluster(4), l3.cluster(LEFTSENSOR));
     TEST_ASSERT_EQUAL_PTR(l3.cluster(5), l3.cluster(RIGHTSENSOR));
+    
+    // Pixels
+    TEST_ASSERT_NOT_NULL(l3.pixels());
+    TEST_ASSERT_EQUAL(10, l3.pixels()->numPixels());
+    TEST_ASSERT_EQUAL(6,  l3.pixels()->getPin());
 }
 
 void test_light_bind() {
-    Light l(12, NUM_CLUSTERS);
+    Light l(12, NUM_CLUSTERS, PIN);
 
     /* Bind 0 and 1 to  LEFTSIGNAL*/
     l.bind(0, LEFTSIGNAL);
@@ -126,33 +135,41 @@ void test_light_bind() {
 }
 
 void test_light_bind2() {
-    Light l(12, NUM_CLUSTERS);
+    Light l(12, NUM_CLUSTERS, PIN);
 
     /* Sigle element range */
     l.bind(0, 0, LEFTSIGNAL);
-    TEST_ASSERT_FALSE(l.cluster(LEFTSIGNAL)->leds.empty()); /* 0 and 1 */
+    TEST_ASSERT_FALSE(l.cluster(LEFTSIGNAL)->leds.empty()); /* 0 */
     TEST_ASSERT_EQUAL_PTR(l.node(0), l.cluster(LEFTSIGNAL)->leds.head()); /* led 0 */
+    TEST_ASSERT_EQUAL(1, l.cluster(LEFTSIGNAL)->leds.count());
 
     /* 2 element inclusive */
     l.bind(1, 2, RIGHTSIGNAL);
     TEST_ASSERT_FALSE(l.cluster(RIGHTSIGNAL)->leds.empty()); /* 1 and 2 */
     TEST_ASSERT_EQUAL_PTR(l.node(1), l.cluster(RIGHTSIGNAL)->leds.head()); /* led 1 */
     TEST_ASSERT_EQUAL_PTR(l.node(2), l.cluster(RIGHTSIGNAL)->leds.tail()); /* led 2 */
+    TEST_ASSERT_EQUAL(2, l.cluster(RIGHTSIGNAL)->leds.count());
 
     /* Swapped order */
     l.bind(4, 3, HEAD);
-    TEST_ASSERT_FALSE(l.cluster(HEAD)->leds.empty()); /* 0 and 1 */
+    TEST_ASSERT_FALSE(l.cluster(HEAD)->leds.empty());
     TEST_ASSERT_EQUAL_PTR(l.node(3), l.cluster(HEAD)->leds.head()); /* led 3 */
     TEST_ASSERT_EQUAL_PTR(l.node(4), l.cluster(HEAD)->leds.tail()); /* led 4 */
+    TEST_ASSERT_EQUAL(2, l.cluster(HEAD)->leds.count());
 
     /* Some what long range */
     l.bind(5, 11, TAIL);
-    TEST_ASSERT_FALSE(l.cluster(TAIL)->leds.empty()); /* 0 and 1 */
+    TEST_ASSERT_FALSE(l.cluster(TAIL)->leds.empty());
     TEST_ASSERT_EQUAL_PTR(l.node(5), l.cluster(TAIL)->leds.head()); /* led 5 */
     TEST_ASSERT_EQUAL_PTR(l.node(11), l.cluster(TAIL)->leds.tail()); /* led 11 */
+    TEST_ASSERT_EQUAL(7, l.cluster(TAIL)->leds.count());
 
-    TEST_ASSERT_TRUE(l.cluster(LEFTSENSOR)->leds.empty()); /* 0 and 1 */
-    TEST_ASSERT_TRUE(l.cluster(RIGHTSENSOR)->leds.empty()); /* 0 and 1 */
+    TEST_ASSERT_TRUE(l.cluster(LEFTSENSOR)->leds.empty());
+    TEST_ASSERT_EQUAL(0, l.cluster(LEFTSENSOR)->leds.count());
+
+    l.bind(12, 12, RIGHTSENSOR);
+    TEST_ASSERT_FALSE(l.cluster(RIGHTSENSOR)->leds.empty());
+    TEST_ASSERT_EQUAL(1, l.cluster(RIGHTSENSOR)->leds.count());
 
     /* Re-bind */
     l.bind(0, 4, TAIL);
@@ -161,11 +178,58 @@ void test_light_bind2() {
     TEST_ASSERT_EQUAL_PTR(l.node(4), l.cluster(TAIL)->leds.tail()); /* led 4 */
 }
 
+void _test_light_set_color_helper(Light * l, int cluster, int from, int to) {
+    int blue = 100;
+    l->bind(from, to, cluster);
+    TEST_ASSERT_FALSE(l->cluster(cluster)->leds.empty());
+    l->setColor(cluster, blue);
+    for (int i = from; i <= to; i++)
+    {
+        TEST_ASSERT_EQUAL(blue, l->pixels()->getPixelColor(i % l->ledCount()));
+    }
+}
+
+void _test_light_off_helper(Light * l, int cluster, int from, int to) {
+    l->bind(from, to, cluster);
+    TEST_ASSERT_FALSE(l->cluster(cluster)->leds.empty());
+    l->off(cluster);
+    for (int i = from; i <= to; i++)
+    {
+        TEST_ASSERT_EQUAL(0, l->pixels()->getPixelColor(i % l->ledCount()));
+    }
+}
+
+void test_light_set_color_helper(Light * l, int cluster, int from, int to) {
+    _test_light_set_color_helper(l, cluster, from, to);
+}
+
+void test_light_off_helper(Light * l, int cluster, int from, int to) {
+    _test_light_off_helper(l, cluster, from, to);
+}
+
+void test_light_set_color() {
+    Light l(26, NUM_CLUSTERS, PIN);
+    test_light_set_color_helper(&l, HEAD, 7, 10);            delay(200);
+    test_light_set_color_helper(&l, LEFTSENSOR, 11, 12);     delay(200);
+    test_light_set_color_helper(&l, LEFTSIGNAL, 13, 21);     delay(200);
+    test_light_set_color_helper(&l, TAIL, 20, 23);           delay(200);
+    test_light_set_color_helper(&l, RIGHTSIGNAL, 22, 30);    delay(200);  // reset to 0 if exceeds number of leds
+    test_light_set_color_helper(&l, RIGHTSENSOR, 5, 6);      delay(200);
+
+    test_light_off_helper(&l, HEAD, 7, 10);                  delay(200);
+    test_light_off_helper(&l, LEFTSENSOR, 11, 12);           delay(200);
+    test_light_off_helper(&l, LEFTSIGNAL, 13, 21);           delay(200);
+    test_light_off_helper(&l, TAIL, 20, 23);                 delay(200);
+    test_light_off_helper(&l, RIGHTSIGNAL, 22, 30);          delay(200); // reset to 0 if exceeds number of leds
+    test_light_off_helper(&l, RIGHTSENSOR, 5, 6);            delay(200);
+}
+
 void process() {
     UNITY_BEGIN();
     RUN_TEST(test_light_constructor);
     RUN_TEST(test_light_bind);
     RUN_TEST(test_light_bind2);
+    RUN_TEST(test_light_set_color);
     UNITY_END();
 }
 
