@@ -4,6 +4,10 @@ Light::Light(int ledCount, int clusterCount, int pin) {
     init(ledCount, clusterCount, pin);
 }
 
+Light::~Light() {
+    destroy();
+}
+
 void Light::init(int ledCount, int clusterCount, int pin){
     m_ledCount = ledCount <= 0 ? 0 : ledCount;
     m_clusterCount = clusterCount <= 0 ? 0 : clusterCount;
@@ -33,6 +37,29 @@ void Light::init(int ledCount, int clusterCount, int pin){
         {
             m_clusters[i].effect = new Effect(OFF, 0, 0);
         }
+    }
+}
+
+/* Release resources of m_pixels so it can be resued for other Light objects */
+void Light::destroy() {
+    if (m_nodes) {
+        delete m_nodes;
+        m_nodes = NULL;
+
+    }
+
+    if (m_clusters) {
+        for (int i = 0; i < m_clusterCount; i++)
+        {
+            delete m_clusters[i].effect;
+        }
+        delete m_clusters;
+        m_clusters = NULL;
+    }
+
+    if (m_pixels) {
+        delete m_pixels;
+        m_pixels = NULL;
     }
 }
 
@@ -83,3 +110,39 @@ void Light::setColor(int cluster, int color){
     }
     m_pixels->show();
 }
+
+void Light::update(){
+    for (int i = 0; i < m_clusterCount; i++)
+    {
+        m_clusters[i].update(m_pixels);
+    }
+}
+
+Timer::Timer() {
+    reset();
+    setInterval(1000);
+};
+
+void Timer::setInterval(long interval) {
+    if (interval <= 0)
+        return;
+    m_interval = interval;
+};
+
+void Timer::reset() {
+    m_start = millis();
+};
+
+long Timer::elapse() {
+    return millis() - m_start;
+};
+
+bool Timer::timesUp() {
+    if (elapse() < m_interval) {
+        return false;
+    }
+    else {
+        reset();
+        return true;
+    }
+};

@@ -3,9 +3,11 @@
 #include <stddef.h>
 #include "list.h"
 #include <Adafruit_NeoPixel.h>
+#include <Arduino.h>
 
 struct LED;
 typedef struct LED LED;
+class Light;
 
 enum LightMode {
     FLASHING,
@@ -13,10 +15,35 @@ enum LightMode {
     OFF
 };
 
+/* Timer. Default interval is 1000 milisecond. */
+class Timer {
+    private:
+        long m_start;
+        long m_interval; /* miliseconds */
+
+    public:
+        /* Constructor */
+        Timer();
+        /* Set interval in miliseconds */
+        void setInterval(long interval);
+        /* Reset timer */
+        void reset();
+        /* Return time elapse in miliseconds */
+        long elapse();
+        /* Return false if time is up, else reset timer then return true */
+        bool timesUp();
+        long interval() { return m_interval; };
+        long startTime() { return m_start; };
+
+};
+
 typedef struct Effect {
     LightMode mode;     // Mode
     long interval;      // Update interval
     long t0;            // Start time, used to determine when to update
+    Timer timer;
+    bool state;
+    int color = 0;
     Effect(){
         mode = OFF;
         interval = 0;
@@ -37,6 +64,21 @@ typedef struct Effect {
         this->interval = interval;
         this->t0 = t0;
     };
+
+    void update(List *leds, Adafruit_NeoPixel* pixels) {
+        if (!leds || leds->empty() || !pixels || !timer.timesUp()) {
+            return;
+        } else {
+            // turn light the opposite direction
+            for (Node *n = leds->head(); !IS_SELF(n); n = n->next)
+            {
+                pixels->setPixelColor(n->ivalue, state == HIGH ? 0 : color++);
+            }
+            // Save current state
+            state = !state;
+            pixels->show();
+        }
+    }
 } Effect;
 
 typedef struct Cluster {
@@ -46,12 +88,23 @@ typedef struct Cluster {
         effect = NULL;
         List led();
     }
+
+    void update(Adafruit_NeoPixel* pixels) {
+        if(!effect)
+            return;
+        effect->update(&leds, pixels);
+    }
+
 } Cluster;
 
 class Light {
     public:
         /* Constructor */
         Light(int ledCount, int clusterCount, int pin);
+
+        /* Destructor */
+        ~Light();
+        void destroy();
 
         /* Controls */
         /* Turn all lights off */
@@ -92,19 +145,21 @@ class Light {
         /* Getters */
         Adafruit_NeoPixel *pixels() { return m_pixels; };
         Node *nodes()               { return m_nodes; };
+        Cluster *clusters()         { return m_clusters; };
         Node *node(int idx)         { return (idx >= 0) ? (m_nodes + (idx % m_ledCount)) : NULL; };
+        Cluster *cluster(int idx)   { return (idx >= 0) ? (m_clusters + (idx % m_clusterCount)) : NULL; };
         int ledCount()              { return m_ledCount; };
         int clusterCount()          { return m_clusterCount; };
-        Cluster *clusters()         { return m_clusters; };
-        Cluster *cluster(int idx)   { return (idx >= 0) ? (m_clusters + (idx % m_clusterCount)) : NULL; };
 
     private:
         void init(int ledCount, int clusterCount, int pin);
+
         /* Make and return a light LightArray struct  */
         int m_ledCount; // led count
         int m_clusterCount; // cluster count
         Node *m_nodes;
         Cluster *m_clusters;
         Adafruit_NeoPixel *m_pixels;
+
 };
 #endif

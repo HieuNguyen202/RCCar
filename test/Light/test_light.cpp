@@ -1,11 +1,10 @@
-#if defined(UNIT_TEST) && defined(ARDUINO)
+// #if defined(UNIT_TEST) && defined(ARDUINO)
 
 #include <light.h>
 #include <unity.h>
 #include <stddef.h>
+#include <Arduino.h>
 #define PIN 6 // On Trinket or Gemma, suggest changing this to 1
-
-#ifdef ARDUINO
 
 // This should be user defined cluster
 enum ClusterName {
@@ -18,6 +17,36 @@ enum ClusterName {
     NUM_CLUSTERS
 };
 
+void test_timer() {
+    /* Test default constructor */
+    Timer timer;
+    /* Default interval is 1000 miliseconds */
+    TEST_ASSERT_EQUAL(1000, timer.interval());
+    /* Default start time is milis() at the moment the timer is created */
+    TEST_ASSERT_INT_WITHIN(100, millis(), timer.startTime());
+
+    /* Test reset() */
+    delay(500);
+    timer.reset();
+    TEST_ASSERT_INT_WITHIN(100, millis(), timer.startTime());
+
+    /* Test elapse() */
+    delay(500);
+    TEST_ASSERT_INT_WITHIN(100, 500, timer.elapse());
+
+    /* Test timesUp() */
+    timer.setInterval(500);
+    TEST_ASSERT_EQUAL(500, timer.interval());
+    timer.reset();
+    TEST_ASSERT_INT_WITHIN(100, millis(), timer.startTime()); // Check if timer is automatically reset
+    delay(100);
+    TEST_ASSERT_FALSE(timer.timesUp()); // not yet
+    delay(401);
+    TEST_ASSERT_TRUE(timer.timesUp()); // it's up
+    TEST_ASSERT_INT_WITHIN(100, millis(), timer.startTime()); // Check if timer is automatically reset
+
+}
+
 void test_light_constructor() {
 
     TEST_ASSERT_EQUAL(6, NUM_CLUSTERS);
@@ -28,6 +57,8 @@ void test_light_constructor() {
     TEST_ASSERT_EQUAL(0, l1.clusterCount());
     TEST_ASSERT_NULL(l1.nodes());
     TEST_ASSERT_NULL(l1.clusters());
+    TEST_ASSERT_NULL(l1.pixels());
+    l1.destroy();
     TEST_ASSERT_NULL(l1.pixels());
 
     // Typical parameters
@@ -66,6 +97,12 @@ void test_light_constructor() {
     TEST_ASSERT_NOT_NULL(l3.pixels());
     TEST_ASSERT_EQUAL(10, l3.pixels()->numPixels());
     TEST_ASSERT_EQUAL(6,  l3.pixels()->getPin());
+
+    /* Test destructor */
+    l3.destroy();
+    TEST_ASSERT_NULL(l3.pixels());
+    TEST_ASSERT_NULL(l3.clusters());
+    TEST_ASSERT_NULL(l3.nodes());
 }
 
 void test_light_bind() {
@@ -132,6 +169,8 @@ void test_light_bind() {
 
     TEST_ASSERT_FALSE(l.cluster(LEFTSIGNAL)->leds.empty());  // Contains led 0 and 1
     TEST_ASSERT_FALSE(l.cluster(RIGHTSIGNAL)->leds.empty()); // Contains led 2 and 3
+    l.destroy();
+    TEST_ASSERT_NULL(l.pixels());
 }
 
 void test_light_bind2() {
@@ -176,6 +215,8 @@ void test_light_bind2() {
     TEST_ASSERT_FALSE(l.cluster(TAIL)->leds.empty()); /* 0 and 1 */
     TEST_ASSERT_EQUAL_PTR(l.node(5), l.cluster(TAIL)->leds.head()); /* led 5 */
     TEST_ASSERT_EQUAL_PTR(l.node(4), l.cluster(TAIL)->leds.tail()); /* led 4 */
+    l.destroy();
+    TEST_ASSERT_NULL(l.pixels());
 }
 
 void _test_light_set_color_helper(Light * l, int cluster, int from, int to) {
@@ -222,18 +263,45 @@ void test_light_set_color() {
     test_light_off_helper(&l, TAIL, 20, 23);                 delay(200);
     test_light_off_helper(&l, RIGHTSIGNAL, 22, 30);          delay(200); // reset to 0 if exceeds number of leds
     test_light_off_helper(&l, RIGHTSENSOR, 5, 6);            delay(200);
+    l.destroy();
+    TEST_ASSERT_NULL(l.pixels());
+}
+
+void test_effect_blinking() {
+    Light l(26, NUM_CLUSTERS, PIN);
+    l.bind(7, 10, HEAD);
+    l.bind(11, 12, LEFTSENSOR);
+    l.bind(13, 19, LEFTSIGNAL);
+    l.bind(20, 23, TAIL);
+    l.bind(24, 30, RIGHTSIGNAL);
+    l.bind(5, 6, RIGHTSENSOR);
+    l.cluster(HEAD)->effect->timer.setInterval(50);
+    l.cluster(LEFTSENSOR)->effect->timer.setInterval(100);
+    l.cluster(LEFTSIGNAL)->effect->timer.setInterval(200);
+    l.cluster(TAIL)->effect->timer.setInterval(400);
+    l.cluster(RIGHTSIGNAL)->effect->timer.setInterval(800);
+    l.cluster(RIGHTSENSOR)->effect->timer.setInterval(1600);
+    int count = 1000000 / 100;
+    while (count--) {
+        l.update();
+        delay(10);
+    }
+    l.off(TAIL);
+    l.destroy();
+    TEST_ASSERT_NULL(l.pixels());
 }
 
 void process() {
     UNITY_BEGIN();
+    RUN_TEST(test_timer);
     RUN_TEST(test_light_constructor);
     RUN_TEST(test_light_bind);
-    RUN_TEST(test_light_bind2);
+    RUN_TEST(test_light_bind2);  // BUG
     RUN_TEST(test_light_set_color);
+    RUN_TEST(test_effect_blinking);
     UNITY_END();
 }
 
-#include <Arduino.h>
 void setup() {
     process();
 }
@@ -245,13 +313,4 @@ void loop() {
     delay(500);
 }
 
-#else
-
-int main(int argc, char **argv) {
-    process();
-    return 0;
-}
-
-#endif
-
-#endif /* UNIT_TEST && ARDUINO */
+// #endif /* UNIT_TEST && ARDUINO */
