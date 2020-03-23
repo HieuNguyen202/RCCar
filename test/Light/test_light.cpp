@@ -281,14 +281,14 @@ void test_effect_blinking() {
     l.cluster(TAIL)->effect->timer.setInterval(400);
     l.cluster(RIGHTSIGNAL)->effect->timer.setInterval(800);
     l.cluster(RIGHTSENSOR)->effect->timer.setInterval(1600);
-    int count = 1000000 / 100;
-    while (count--) {
+    int d = 10;
+    int elapse = 0; // 5 seconds
+    while ((elapse += d) < 5000) {
         l.update();
-        delay(10);
+        delay(d);
     }
-    l.off(TAIL);
+    l.off();
     l.destroy();
-    TEST_ASSERT_NULL(l.pixels());
 }
 
 void process() {

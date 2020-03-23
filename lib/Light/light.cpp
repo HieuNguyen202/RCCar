@@ -98,6 +98,12 @@ void Light::off(int cluster){
     setColor(cluster, 0);
 }
 
+void Light::off(){
+    if (m_pixels)
+        m_pixels->clear();
+    m_pixels->show();
+}
+
 void Light::setColor(int cluster, int color){
     if (!m_clusters || !m_pixels || !m_nodes)
         return;
